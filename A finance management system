@@ -1,0 +1,143 @@
+using System;
+using System.Collections.Generic;
+
+public record Transaction(int Id, DateTime Date, decimal Amount, string Category);
+
+public interface ITransactionProcessor
+{
+    void Process(Transaction transaction);
+}
+
+public class BankTransferProcessor : ITransactionProcessor
+{
+    public void Process(Transaction transaction)
+    {
+        Console.WriteLine($"Processing bank transfer: {transaction.Amount:C} for {transaction.Category}");
+    }
+}
+
+public class MobileMoneyProcessor : ITransactionProcessor
+{
+    public void Process(Transaction transaction)
+    {
+        Console.WriteLine($"Processing mobile money: {transaction.Amount:C} for {transaction.Category}");
+    }
+}
+
+public class CryptoWalletProcessor : ITransactionProcessor
+{
+    public void Process(Transaction transaction)
+    {
+        Console.WriteLine($"Processing crypto transaction: {transaction.Amount:C} for {transaction.Category}");
+    }
+}
+
+public class Account
+{
+    public string AccountNumber { get; }
+    public decimal Balance { get; protected set; }
+
+    public Account(string accountNumber, decimal initialBalance)
+    {
+        AccountNumber = accountNumber;
+        Balance = initialBalance;
+        Console.WriteLine($"Account created: {AccountNumber} | Initial balance: {Balance:C}");
+    }
+
+    public virtual void ApplyTransaction(Transaction transaction)
+    {
+        Balance -= transaction.Amount;
+        Console.WriteLine($"Transaction applied: -{transaction.Amount:C} | New balance: {Balance:C}");
+    }
+}
+
+public sealed class SavingsAccount : Account
+{
+    public SavingsAccount(string accountNumber, decimal initialBalance) 
+        : base(accountNumber, initialBalance) { }
+
+    public override void ApplyTransaction(Transaction transaction)
+    {
+        if (transaction.Amount > Balance)
+        {
+            Console.WriteLine($"Transaction {transaction.Id} failed: Insufficient funds! " + 
+                             $"Required: {transaction.Amount:C}, Available: {Balance:C}");
+            return;
+        }
+
+        base.ApplyTransaction(transaction);
+        Console.WriteLine($"Savings account transaction completed: {transaction.Category}");
+    }
+}
+
+public class FinanceApp
+{
+    private readonly List<Transaction> _transactions = new();
+    private readonly SavingsAccount _savingsAccount;
+
+    public FinanceApp()
+    {
+        _savingsAccount = new SavingsAccount("SAV-12345", 1000.00m);
+    }
+
+    public void Run()
+    {
+        Console.WriteLine("\n=== PROCESSING TRANSACTIONS ===");
+        
+        // Create sample transactions using record initialization
+        var transactions = new Transaction[]
+        {
+            new(1, DateTime.Today, 150.75m, "Groceries"),
+            new(2, DateTime.Today, 89.99m, "Utilities"),
+            new(3, DateTime.Today, 350.00m, "Entertainment")
+        };
+
+        // Create processors
+        var processors = new ITransactionProcessor[]
+        {
+            new MobileMoneyProcessor(),
+            new BankTransferProcessor(),
+            new CryptoWalletProcessor()
+        };
+
+        // Process and apply transactions
+        for (int i = 0; i < transactions.Length; i++)
+        {
+            Console.WriteLine($"\nProcessing transaction {transactions[i].Id}:");
+            processors[i].Process(transactions[i]);
+            _savingsAccount.ApplyTransaction(transactions[i]);
+            _transactions.Add(transactions[i]);
+        }
+
+        Console.WriteLine("\n=== TRANSACTION SUMMARY ===");
+        Console.WriteLine($"Final balance: {_savingsAccount.Balance:C}");
+        Console.WriteLine($"Transactions processed: {_transactions.Count}");
+    }
+}
+
+class Program
+{
+    static void Main()
+    {
+        try
+        {
+            Console.WriteLine("=== FINANCE MANAGEMENT SYSTEM ===");
+            var app = new FinanceApp();
+            app.Run();
+            
+            // Test insufficient funds scenario
+            TestInsufficientFunds();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"System error: {ex.Message}");
+        }
+    }
+    static void TestInsufficientFunds()
+    {
+        Console.WriteLine("\n=== INSUFFICIENT FUNDS TEST ===");
+        var testAccount = new SavingsAccount("TEST-001", 100.00m);
+        var largeTransaction = new Transaction(99, DateTime.Today, 150.00m, "Test");
+        testAccount.ApplyTransaction(largeTransaction);
+    }
+}
