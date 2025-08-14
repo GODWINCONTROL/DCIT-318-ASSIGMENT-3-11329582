@@ -2,16 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+// Generic Repository Implementation
 public class Repository<T> where T : class
 {
     private readonly List<T> _items = new List<T>();
-
+    
     public void Add(T item) => _items.Add(item);
-
+    
     public List<T> GetAll() => new List<T>(_items);
-
+    
     public T? GetById(Func<T, bool> predicate) => _items.FirstOrDefault(predicate);
-
+    
     public bool Remove(Func<T, bool> predicate)
     {
         var item = GetById(predicate);
@@ -19,65 +20,91 @@ public class Repository<T> where T : class
     }
 }
 
+// Patient Class
 public class Patient
 {
     public int Id { get; }
-    public string Name { get; }
-    public int Age { get; }
-    public string Gender { get; }
+    public string Name { get; set; }
+    public int Age { get; set; }
+    public string Gender { get; set; }
+    public string ContactInfo { get; set; }
+    public string MedicalHistory { get; set; }
 
-    public Patient(int id, string name, int age, string gender)
+    public Patient(int id, string name, int age, string gender, string contactInfo = "", string medicalHistory = "")
     {
         Id = id;
         Name = name;
         Age = age;
         Gender = gender;
+        ContactInfo = contactInfo;
+        MedicalHistory = medicalHistory;
     }
 
-    public override string ToString() => 
-        $"ID: {Id}, Name: {Name}, Age: {Age}, Gender: {Gender}";
+    public override string ToString() => $"{Name} (ID: {Id})";
 }
 
+// Prescription Class
 public class Prescription
 {
     public int Id { get; }
     public int PatientId { get; }
-    public string MedicationName { get; }
+    public string MedicationName { get; set; }
+    public string Dosage { get; set; }
+    public string Instructions { get; set; }
     public DateTime DateIssued { get; }
+    public DateTime? DateFilled { get; set; }
 
-    public Prescription(int id, int patientId, string medicationName, DateTime dateIssued)
+    public Prescription(int id, int patientId, string medicationName, string dosage, 
+                        string instructions, DateTime dateIssued)
     {
         Id = id;
         PatientId = patientId;
         MedicationName = medicationName;
+        Dosage = dosage;
+        Instructions = instructions;
         DateIssued = dateIssued;
     }
 
-    public override string ToString() => 
-        $"ID: {Id}, Medication: {MedicationName}, Date: {DateIssued:yyyy-MM-dd}, Patient ID: {PatientId}";
+    public override string ToString() => $"{MedicationName} ({Dosage}) - Issued: {DateIssued:d}";
 }
 
+// Healthcare System Application
 public class HealthSystemApp
 {
     private readonly Repository<Patient> _patientRepo = new Repository<Patient>();
     private readonly Repository<Prescription> _prescriptionRepo = new Repository<Prescription>();
     private Dictionary<int, List<Prescription>> _prescriptionMap = new Dictionary<int, List<Prescription>>();
-
+    
     public void SeedData()
     {
-        // Add patients
-        _patientRepo.Add(new Patient(1, "Sarah Johnson", 42, "Female"));
-        _patientRepo.Add(new Patient(2, "Michael Chen", 35, "Male"));
-        _patientRepo.Add(new Patient(3, "Emma Rodriguez", 68, "Female"));
+        // Add sample patients
+        _patientRepo.Add(new Patient(1, "Sarah Johnson", 42, "Female", 
+            "555-1234", "Hypertension, Type 2 Diabetes"));
+        _patientRepo.Add(new Patient(2, "Michael Chen", 35, "Male", 
+            "555-5678", "Asthma, Seasonal Allergies"));
+        _patientRepo.Add(new Patient(3, "Emma Rodriguez", 68, "Female", 
+            "555-9012", "Osteoporosis, Hypertension"));
+        _patientRepo.Add(new Patient(4, "James Wilson", 52, "Male", 
+            "555-3456", "High Cholesterol, GERD"));
         
-        // Add prescriptions
-        _prescriptionRepo.Add(new Prescription(101, 1, "Lisinopril", new DateTime(2023, 10, 15)));
-        _prescriptionRepo.Add(new Prescription(102, 1, "Atorvastatin", new DateTime(2023, 11, 2)));
-        _prescriptionRepo.Add(new Prescription(103, 2, "Metformin", new DateTime(2023, 9, 20)));
-        _prescriptionRepo.Add(new Prescription(104, 3, "Warfarin", new DateTime(2023, 10, 5)));
-        _prescriptionRepo.Add(new Prescription(105, 3, "Levothyroxine", new DateTime(2023, 11, 17)));
+        // Add sample prescriptions
+        DateTime today = DateTime.Today;
+        _prescriptionRepo.Add(new Prescription(101, 1, "Lisinopril", "10mg", 
+            "Take once daily", today.AddDays(-30)));
+        _prescriptionRepo.Add(new Prescription(102, 1, "Metformin", "500mg", 
+            "Take twice daily with meals", today.AddDays(-45)));
+        _prescriptionRepo.Add(new Prescription(103, 2, "Albuterol Inhaler", "90mcg", 
+            "Use as needed for shortness of breath", today.AddDays(-15)));
+        _prescriptionRepo.Add(new Prescription(104, 3, "Calcium Carbonate", "1200mg", 
+            "Take twice daily with food", today.AddDays(-60)));
+        _prescriptionRepo.Add(new Prescription(105, 3, "Warfarin", "5mg", 
+            "Take once daily, monitor INR", today.AddDays(-10)));
+        _prescriptionRepo.Add(new Prescription(106, 4, "Atorvastatin", "40mg", 
+            "Take once at bedtime", today.AddDays(-20)));
+        _prescriptionRepo.Add(new Prescription(107, 4, "Omeprazole", "20mg", 
+            "Take once daily before breakfast", today.AddDays(-25)));
     }
-
+    
     public void BuildPrescriptionMap()
     {
         _prescriptionMap = _prescriptionRepo.GetAll()
@@ -87,22 +114,46 @@ public class HealthSystemApp
                 group => group.OrderByDescending(p => p.DateIssued).ToList()
             );
     }
-
-    public List<Prescription> GetPrescriptionsByPatientId(int patientId) =>
-        _prescriptionMap.TryGetValue(patientId, out var prescriptions) 
-            ? prescriptions 
+    
+    public List<Prescription> GetPrescriptionsByPatientId(int patientId)
+    {
+        return _prescriptionMap.ContainsKey(patientId) 
+            ? _prescriptionMap[patientId] 
             : new List<Prescription>();
-
+    }
+    
     public void PrintAllPatients()
     {
-        Console.WriteLine("=== PATIENT REGISTRY ===");
+        Console.Clear();
+        Console.WriteLine("===== PATIENT REGISTRY =====");
+        Console.WriteLine("ID  Name                Age Gender");
+        Console.WriteLine("----------------------------------");
+        
         foreach (var patient in _patientRepo.GetAll())
         {
-            Console.WriteLine(patient);
+            Console.WriteLine($"{patient.Id,-3} {patient.Name,-20} {patient.Age,-3} {patient.Gender}");
         }
+    }
+    
+    public void PrintPatientDetails(int patientId)
+    {
+        var patient = _patientRepo.GetById(p => p.Id == patientId);
+        if (patient == null)
+        {
+            Console.WriteLine($"Patient with ID {patientId} not found.");
+            return;
+        }
+        
+        Console.Clear();
+        Console.WriteLine($"===== PATIENT DETAILS: {patient.Name} =====");
+        Console.WriteLine($"ID: {patient.Id}");
+        Console.WriteLine($"Age: {patient.Age}");
+        Console.WriteLine($"Gender: {patient.Gender}");
+        Console.WriteLine($"Contact: {patient.ContactInfo}");
+        Console.WriteLine($"Medical History: {patient.MedicalHistory}");
         Console.WriteLine();
     }
-
+    
     public void PrintPrescriptionsForPatient(int patientId)
     {
         var patient = _patientRepo.GetById(p => p.Id == patientId);
@@ -111,20 +162,41 @@ public class HealthSystemApp
             Console.WriteLine($"Patient with ID {patientId} not found.");
             return;
         }
-
-        Console.WriteLine($"=== PRESCRIPTIONS FOR {patient.Name.ToUpper()} ===");
+        
         var prescriptions = GetPrescriptionsByPatientId(patientId);
         
+        Console.WriteLine($"===== PRESCRIPTIONS FOR {patient.Name} =====");
         if (prescriptions.Count == 0)
         {
             Console.WriteLine("No prescriptions found.");
             return;
         }
-
-        foreach (var prescription in prescriptions)
+        
+        Console.WriteLine("ID   Medication          Dosage    Issued       Instructions");
+        Console.WriteLine("------------------------------------------------------------");
+        foreach (var rx in prescriptions)
         {
-            Console.WriteLine(prescription);
+            Console.WriteLine($"{rx.Id,-4} {rx.MedicationName,-18} {rx.Dosage,-8} {rx.DateIssued:d}   {rx.Instructions}");
         }
+    }
+    
+    public void AddNewPatient(string name, int age, string gender, string contactInfo, string medicalHistory)
+    {
+        int newId = _patientRepo.GetAll().Count > 0 
+            ? _patientRepo.GetAll().Max(p => p.Id) + 1 
+            : 1;
+        
+        _patientRepo.Add(new Patient(newId, name, age, gender, contactInfo, medicalHistory));
+    }
+    
+    public void AddNewPrescription(int patientId, string medication, string dosage, string instructions)
+    {
+        int newId = _prescriptionRepo.GetAll().Count > 0 
+            ? _prescriptionRepo.GetAll().Max(r => r.Id) + 1 
+            : 101;
+        
+        _prescriptionRepo.Add(new Prescription(newId, patientId, medication, dosage, instructions, DateTime.Today));
+        BuildPrescriptionMap(); // Rebuild the map to include the new prescription
     }
 }
 
@@ -132,30 +204,104 @@ class Program
 {
     static void Main()
     {
-        var app = new HealthSystemApp();
-        
-        // Initialize data
+        HealthSystemApp app = new HealthSystemApp();
         app.SeedData();
         app.BuildPrescriptionMap();
         
-        // Display all patients
-        app.PrintAllPatients();
-        
-        // Get prescriptions for a sample patient
-        Console.WriteLine("Enter Patient ID to view prescriptions:");
-        if (int.TryParse(Console.ReadLine(), out int patientId))
+        while (true)
         {
-            app.PrintPrescriptionsForPatient(patientId);
+            Console.Clear();
+            Console.WriteLine("===== HEALTHCARE MANAGEMENT SYSTEM =====");
+            Console.WriteLine("1. View All Patients");
+            Console.WriteLine("2. View Patient Details");
+            Console.WriteLine("3. View Patient Prescriptions");
+            Console.WriteLine("4. Add New Patient");
+            Console.WriteLine("5. Add New Prescription");
+            Console.WriteLine("6. Exit");
+            Console.Write("Select an option: ");
+            
+            string choice = Console.ReadLine();
+            
+            switch (choice)
+            {
+                case "1":
+                    app.PrintAllPatients();
+                    Console.WriteLine("\nPress any key to continue...");
+                    Console.ReadKey();
+                    break;
+                    
+                case "2":
+                    Console.Write("Enter Patient ID: ");
+                    if (int.TryParse(Console.ReadLine(), out int patientId))
+                    {
+                        app.PrintPatientDetails(patientId);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Invalid input.");
+                    }
+                    Console.WriteLine("\nPress any key to continue...");
+                    Console.ReadKey();
+                    break;
+                    
+                case "3":
+                    Console.Write("Enter Patient ID: ");
+                    if (int.TryParse(Console.ReadLine(), out int rxPatientId))
+                    {
+                        app.PrintPrescriptionsForPatient(rxPatientId);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Invalid input.");
+                    }
+                    Console.WriteLine("\nPress any key to continue...");
+                    Console.ReadKey();
+                    break;
+                    
+                case "4":
+                    Console.Write("Patient Name: ");
+                    string name = Console.ReadLine();
+                    Console.Write("Age: ");
+                    int age = int.Parse(Console.ReadLine());
+                    Console.Write("Gender: ");
+                    string gender = Console.ReadLine();
+                    Console.Write("Contact Info: ");
+                    string contact = Console.ReadLine();
+                    Console.Write("Medical History: ");
+                    string history = Console.ReadLine();
+                    
+                    app.AddNewPatient(name, age, gender, contact, history);
+                    Console.WriteLine("Patient added successfully!");
+                    Console.WriteLine("\nPress any key to continue...");
+                    Console.ReadKey();
+                    break;
+                    
+                case "5":
+                    Console.Write("Patient ID: ");
+                    int pId = int.Parse(Console.ReadLine());
+                    Console.Write("Medication: ");
+                    string med = Console.ReadLine();
+                    Console.Write("Dosage: ");
+                    string dose = Console.ReadLine();
+                    Console.Write("Instructions: ");
+                    string instructions = Console.ReadLine();
+                    
+                    app.AddNewPrescription(pId, med, dose, instructions);
+                    Console.WriteLine("Prescription added successfully!");
+                    Console.WriteLine("\nPress any key to continue...");
+                    Console.ReadKey();
+                    break;
+                    
+                case "6":
+                    Console.WriteLine("Exiting system...");
+                    return;
+                    
+                default:
+                    Console.WriteLine("Invalid option, please try again.");
+                    Console.WriteLine("\nPress any key to continue...");
+                    Console.ReadKey();
+                    break;
+            }
         }
-        else
-        {
-            Console.WriteLine("Invalid input. Displaying records for Patient ID 1:");
-            app.PrintPrescriptionsForPatient(1);
-        }
-        
-        // Display additional patient records
-        Console.WriteLine("\nAdditional patient records:");
-        app.PrintPrescriptionsForPatient(2);
-        app.PrintPrescriptionsForPatient(3);
     }
 }
