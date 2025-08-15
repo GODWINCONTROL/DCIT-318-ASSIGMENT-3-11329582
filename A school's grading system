@@ -1,0 +1,190 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+
+// Custom Exceptions
+public class InvalidScoreFormatException : Exception
+{
+    public InvalidScoreFormatException(string message) : base(message) { }
+}
+
+public class MissingFieldException : Exception
+{
+    public MissingFieldException(string message) : base(message) { }
+}
+
+// Student Class
+public class Student
+{
+    public int Id { get; }
+    public string FullName { get; }
+    public int Score { get; }
+
+    public Student(int id, string fullName, int score)
+    {
+        if (id <= 0) throw new ArgumentException("ID must be positive");
+        if (string.IsNullOrWhiteSpace(fullName)) throw new ArgumentException("Name cannot be empty");
+        if (score < 0 || score > 100) throw new ArgumentException("Score must be 0-100");
+        
+        Id = id;
+        FullName = fullName.Trim();
+        Score = score;
+    }
+
+    public string GetGrade()
+    {
+        return Score switch
+        {
+            >= 80 and <= 100 => "A",
+            >= 70 and < 80 => "B",
+            >= 60 and < 70 => "C",
+            >= 50 and < 60 => "D",
+            _ => "F"
+        };
+    }
+
+    public override string ToString() => 
+        $"{FullName} (ID: {Id}): Score = {Score}, Grade = {GetGrade()}";
+}
+
+// Result Processor
+public class StudentResultProcessor
+{
+    public List<Student> ReadStudentsFromFile(string inputFilePath)
+    {
+        var students = new List<Student>();
+        int lineNumber = 0;
+
+        using var reader = new StreamReader(inputFilePath);
+        while (!reader.EndOfStream)
+        {
+            lineNumber++;
+            string line = reader.ReadLine()?.Trim();
+            if (string.IsNullOrEmpty(line)) continue;
+
+            try
+            {
+                string[] fields = line.Split(',');
+                
+                // Validate field count
+                if (fields.Length < 3)
+                    throw new MissingFieldException(
+                        $"Line {lineNumber}: Expected 3 fields, found {fields.Length}");
+                
+                // Extract fields
+                string idString = fields[0].Trim();
+                string name = fields[1].Trim();
+                string scoreString = fields[2].Trim();
+
+                // Validate ID
+                if (!int.TryParse(idString, out int id) || id <= 0)
+                    throw new InvalidScoreFormatException(
+                        $"Line {lineNumber}: Invalid ID format '{idString}'");
+                
+                // Validate score
+                if (!int.TryParse(scoreString, out int score))
+                    throw new InvalidScoreFormatException(
+                        $"Line {lineNumber}: Invalid score format '{scoreString}'");
+                
+                students.Add(new Student(id, name, score));
+            }
+            catch (Exception ex) when (ex is MissingFieldException || ex is InvalidScoreFormatException)
+            {
+                Console.WriteLine($"Skipping line {lineNumber}: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error processing line {lineNumber}: {ex.Message}");
+            }
+        }
+        
+        if (students.Count == 0)
+            Console.WriteLine("Warning: No valid student records found in file");
+        
+        return students;
+    }
+
+    public void WriteReportToFile(List<Student> students, string outputFilePath)
+    {
+        using var writer = new StreamWriter(outputFilePath);
+        writer.WriteLine("===== STUDENT GRADE REPORT =====");
+        writer.WriteLine($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm}");
+        writer.WriteLine("-------------------------------");
+        
+        if (students.Count == 0)
+        {
+            writer.WriteLine("No valid student records available");
+            return;
+        }
+        
+        // Group by grade for better organization
+        var grouped = students
+            .OrderByDescending(s => s.Score)
+            .GroupBy(s => s.GetGrade());
+        
+        foreach (var group in grouped)
+        {
+            writer.WriteLine($"\n--- GRADE {group.Key} STUDENTS ---");
+            foreach (var student in group)
+            {
+                writer.WriteLine(student);
+            }
+        }
+        
+        // Add statistics
+        writer.WriteLine("\n===== STATISTICS =====");
+        writer.WriteLine($"Total Students: {students.Count}");
+        writer.WriteLine($"Average Score: {students.Average(s => s.Score):F1}");
+        writer.WriteLine($"Highest Score: {students.Max(s => s.Score)}");
+        writer.WriteLine($"Lowest Score: {students.Min(s => s.Score)}");
+    }
+}
+
+class Program
+{
+    static void Main()
+    {
+        const string inputFile = "student_scores.txt";
+        const string outputFile = "grade_report.txt";
+        
+        var processor = new StudentResultProcessor();
+        
+        try
+        {
+            // Read and process data
+            var students = processor.ReadStudentsFromFile(inputFile);
+            
+            // Generate report
+            processor.WriteReportToFile(students, outputFile);
+            
+            Console.WriteLine($"Successfully processed {students.Count} records");
+            Console.WriteLine($"Report saved to: {Path.GetFullPath(outputFile)}");
+        }
+        catch (FileNotFoundException)
+        {
+            Console.WriteLine($"Error: Input file not found at '{Path.GetFullPath(inputFile)}'");
+            Console.WriteLine("Please create the file with student data in this format:");
+            Console.WriteLine("101, John Smith, 85");
+            Console.WriteLine("102, Sarah Johnson, 72");
+            Console.WriteLine("...");
+        }
+        catch (DirectoryNotFoundException)
+        {
+            Console.WriteLine("Error: Invalid directory path in file location");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            Console.WriteLine("Error: Permission denied for file access");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Unexpected error: {ex.Message}");
+        }
+        finally
+        {
+            Console.WriteLine("\nProcessing completed. Press any key to exit...");
+            Console.ReadKey();
+        }
+    }
+}
