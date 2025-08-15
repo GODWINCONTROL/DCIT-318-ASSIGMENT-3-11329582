@@ -1,0 +1,174 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
+
+// Marker Interface
+public interface IInventoryEntity
+{
+    int Id { get; }
+}
+
+// Immutable Inventory Record
+public record InventoryItem(int Id, string Name, int Quantity, DateTime DateAdded) : IInventoryEntity;
+
+// Generic Inventory Logger
+public class InventoryLogger<T> where T : IInventoryEntity
+{
+    private readonly List<T> _log = new List<T>();
+    private readonly string _filePath;
+
+    public InventoryLogger(string filePath)
+    {
+        _filePath = filePath;
+    }
+
+    public void Add(T item)
+    {
+        _log.Add(item);
+        Console.WriteLine($"Added: {item}");
+    }
+
+    public List<T> GetAll() => new List<T>(_log);
+
+    public void SaveToFile()
+    {
+        try
+        {
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            string json = JsonSerializer.Serialize(_log, options);
+            
+            using var writer = new StreamWriter(_filePath);
+            writer.Write(json);
+            
+            Console.WriteLine($"\nSaved {_log.Count} items to {_filePath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Save failed: {ex.Message}");
+        }
+    }
+
+    public void LoadFromFile()
+    {
+        try
+        {
+            if (!File.Exists(_filePath))
+            {
+                Console.WriteLine($"File not found: {_filePath}");
+                return;
+            }
+
+            using var reader = new StreamReader(_filePath);
+            string json = reader.ReadToEnd();
+            
+            var items = JsonSerializer.Deserialize<List<T>>(json) ?? new List<T>();
+            _log.Clear();
+            _log.AddRange(items);
+            
+            Console.WriteLine($"Loaded {items.Count} items from {_filePath}");
+        }
+        catch (JsonException ex)
+        {
+            Console.WriteLine($"Invalid JSON format: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Load failed: {ex.Message}");
+        }
+    }
+
+    public void Clear() => _log.Clear();
+}
+
+// Inventory Application
+public class InventoryApp
+{
+    private readonly InventoryLogger<InventoryItem> _logger;
+    
+    public InventoryApp(string filePath)
+    {
+        _logger = new InventoryLogger<InventoryItem>(filePath);
+    }
+
+    public void SeedSampleData()
+    {
+        Console.WriteLine("\nSeeding sample data...");
+        _logger.Add(new InventoryItem(101, "Laptop", 15, DateTime.Now.AddDays(-30)));
+        _logger.Add(new InventoryItem(102, "Monitor", 25, DateTime.Now.AddDays(-15)));
+        _logger.Add(new InventoryItem(103, "Keyboard", 50, DateTime.Now.AddDays(-7)));
+        _logger.Add(new InventoryItem(104, "Mouse", 45, DateTime.Now.AddDays(-3)));
+        _logger.Add(new InventoryItem(105, "Headphones", 30, DateTime.Now));
+    }
+
+    public void SaveData() => _logger.SaveToFile();
+
+    public void LoadData() => _logger.LoadFromFile();
+
+    public void PrintAllItems()
+    {
+        var items = _logger.GetAll();
+        
+        Console.WriteLine("\n===== INVENTORY REPORT =====");
+        Console.WriteLine($"{"ID",-5} {"Name",-15} {"Qty",-5} {"Date Added",-20} {"Days in Stock",-12}");
+        Console.WriteLine(new string('-', 60));
+        
+        if (items.Count == 0)
+        {
+            Console.WriteLine("No inventory items found");
+            return;
+        }
+
+        foreach (var item in items)
+        {
+            int daysInStock = (DateTime.Now - item.DateAdded).Days;
+            Console.WriteLine($"{item.Id,-5} {item.Name,-15} {item.Quantity,-5} {item.DateAdded:yyyy-MM-dd HH:mm} {daysInStock + " days",-12}");
+        }
+        
+        Console.WriteLine("\nStatistics:");
+        Console.WriteLine($"Total Items: {items.Count}");
+        Console.WriteLine($"Total Quantity: {items.Sum(i => i.Quantity)}");
+        Console.WriteLine($"Oldest Item: {items.Min(i => i.DateAdded):d}");
+        Console.WriteLine($"Newest Item: {items.Max(i => i.DateAdded):d}");
+    }
+
+    public void ClearMemory() => _logger.Clear();
+}
+
+class Program
+{
+    static void Main()
+    {
+        const string filePath = "inventory.json";
+        var app = new InventoryApp(filePath);
+
+        try
+        {
+            // Create and save initial data
+            app.SeedSampleData();
+            app.SaveData();
+
+            // Clear memory to simulate new session
+            app.ClearMemory();
+            Console.WriteLine("\nMemory cleared. Starting new session...");
+
+            // Load data from file and display
+            app.LoadData();
+            app.PrintAllItems();
+
+            // Demonstrate file error handling
+            Console.WriteLine("\nTesting error handling...");
+            var testApp = new InventoryApp("invalid/path/inventory.json");
+            testApp.LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Critical error: {ex.Message}");
+        }
+        finally
+        {
+            Console.WriteLine("\nProgram completed. Press any key to exit...");
+            Console.ReadKey();
+        }
+    }
+}
